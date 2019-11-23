@@ -3,8 +3,10 @@ use async_std::net::TcpStream;
 use async_std::prelude::*;
 use async_std::task;
 use async_tls::TlsConnector;
+use log::{info};
+use simple_logger;
 
-use rustls::ClientConfig;
+use rustls::{self, ClientConfig};
 
 use std::io::Cursor;
 use std::net::ToSocketAddrs;
@@ -33,6 +35,7 @@ struct Options {
 }
 
 fn main() -> io::Result<()> {
+    simple_logger::init_with_level(log::Level::Debug).unwrap();
     let options = Options::from_args();
 
     // Check if the provided host exists
@@ -62,11 +65,15 @@ fn main() -> io::Result<()> {
         // Open a normal TCP connection, just as you are used to
         let tcp_stream = TcpStream::connect(&addr).await?;
 
+        info!("TCP conn done");
+
         // Use the connector to start the handshake process.
         // This consumes the TCP stream to ensure you are not reusing it.
         // Awaiting the handshake gives you an encrypted
         // stream back which you can use like any other.
         let mut tls_stream = connector.connect(&domain, tcp_stream).await?;
+
+        info!("TLS conn done");
 
         // We write our crafted HTTP request to it
         tls_stream.write_all(http_request.as_bytes()).await?;
@@ -82,6 +89,9 @@ fn main() -> io::Result<()> {
 
 async fn connector_for_ca_file(cafile: &Path) -> io::Result<TlsConnector> {
     let mut config = ClientConfig::new();
+    let (my_cert, my_key) = gen_cert();
+    config.set_single_client_cert(vec![my_cert], my_key);
+
     let file = async_std::fs::read(cafile).await?;
     let mut pem = Cursor::new(file);
     config
@@ -89,4 +99,10 @@ async fn connector_for_ca_file(cafile: &Path) -> io::Result<TlsConnector> {
         .add_pem_file(&mut pem)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid cert"))?;
     Ok(TlsConnector::from(Arc::new(config)))
+}
+
+fn gen_cert() -> (rustls::Certificate, rustls::PrivateKey) {
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    (rustls::Certificate(cert.serialize_der().unwrap()),
+     rustls::PrivateKey(cert.serialize_private_key_der()))
 }

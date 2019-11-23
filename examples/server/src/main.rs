@@ -4,7 +4,8 @@ use async_std::prelude::*;
 use async_std::task;
 use async_tls::TlsAcceptor;
 use rustls::internal::pemfile::{certs, rsa_private_keys};
-use rustls::{Certificate, NoClientAuth, PrivateKey, ServerConfig};
+use rustls::{self, Certificate, NoClientAuth, PrivateKey, ServerConfig};
+use webpki;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -47,7 +48,8 @@ fn load_config(options: &Options) -> io::Result<ServerConfig> {
     let mut keys = load_keys(&options.key)?;
 
     // we don't use client authentication
-    let mut config = ServerConfig::new(NoClientAuth::new());
+    // let mut config = ServerConfig::new(NoClientAuth::new());
+    let mut config = ServerConfig::new(VerifyClientCert::shared());
     config
         // set this server to use one cert together with the loaded private key
         .set_single_cert(certs, keys.remove(0))
@@ -124,4 +126,32 @@ fn main() -> io::Result<()> {
 
         Ok(())
     })
+}
+
+struct VerifyClientCert {}
+
+impl VerifyClientCert {
+    fn shared() -> Arc<Self> {
+        Arc::new(VerifyClientCert { })
+    }
+}
+
+impl rustls::ClientCertVerifier for VerifyClientCert {
+    fn offer_client_auth(&self) -> bool { true }
+
+    fn client_auth_mandatory(&self) -> bool { true }
+
+    fn client_auth_root_subjects(&self) -> rustls::DistinguishedNames {
+        rustls::DistinguishedNames::new()
+    }
+
+    fn verify_client_cert(&self, presented_certs: &[Certificate])
+                          -> Result<rustls::ClientCertVerified, rustls::TLSError> {
+        println!("presented certs: {}", presented_certs.len());
+        println!("{:?}", presented_certs[0]);
+        println!("");
+        // Peer certificate was issued by not somebody we know.
+        Err(rustls::TLSError::WebPKIError(webpki::Error::UnknownIssuer))
+        // Ok(rustls::ClientCertVerified::assertion())
+    }
 }

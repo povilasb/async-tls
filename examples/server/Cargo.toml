@@ -8,5 +8,5 @@ edition = "2018"
 structopt = "0.2"
 async-std = "0.99"
 async-tls = { path = "../.." }
-rustls = "0.16"
+rustls = { version = "0.16", features = ["dangerous_configuration"] }
 webpki = "0.21"

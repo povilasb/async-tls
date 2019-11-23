@@ -9,3 +9,6 @@ structopt = "0.2"
 rustls    = "0.16"
 async-std = "0.99"
 async-tls = { path = "../.." }
+log = "0.4.8"
+simple_logger = "1.0.3"
+rcgen = "0.7.0"
